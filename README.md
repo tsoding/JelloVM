@@ -1,12 +1,12 @@
-# Pjython
+# JelloVM
 
-JVM Bytecode Parser in Python
+JVM in Python that can only run ["Hello, World"](https://en.wikipedia.org/wiki/%22Hello,_World!%22_program).
 
 ## Quick Start
 
 ```console
-$ javac Main.java # optional
-$ ./main.py
+$ javac Main.java
+$ ./jello.py Main.class
 ```
 
 ## References
