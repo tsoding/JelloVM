@@ -14,7 +14,6 @@ $ ./jello.py Main.class
 This was developed on a livestream:
 
 [![episode-01](./thumbnails/thumbnail-01.png)](https://www.youtube.com/watch?v=67FmRyv8jTM)
-
 [![episode-02](./thumbnails/thumbnail-02.png)](https://www.youtube.com/watch?v=anOidUQcv1w)
 
 ## References
