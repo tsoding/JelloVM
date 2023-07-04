@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
+"JVM in Python"
+
 import pprint
 import sys
 import io
+from typing import Any, cast
 
 pp = pprint.PrettyPrinter()
 
@@ -33,52 +36,55 @@ class_access_flags = [
 ]
 
 method_access_flags = [
-    ("ACC_PUBLIC", 0x0001),
-    ("ACC_PRIVATE", 0x0002),
-    ("ACC_PROTECTED", 0x0004),
-    ("ACC_STATIC", 0x0008),
-    ("ACC_FINAL", 0x0010),
-    ("ACC_SYNCHRONIZED", 0x0020),
-    ("ACC_BRIDGE", 0x0040),
-    ("ACC_VARARGS", 0x0080),
-    ("ACC_NATIVE", 0x0100),
-    ("ACC_ABSTRACT", 0x0400),
-    ("ACC_STRICT", 0x0800),
-    ("ACC_SYNTHETIC", 0x1000),
+    ("ACC_PUBLIC"       , 0x0001),
+    ("ACC_PRIVATE"      , 0x0002),
+    ("ACC_PROTECTED"    , 0x0004),
+    ("ACC_STATIC"       , 0x0008),
+    ("ACC_FINAL"        , 0x0010),
+    ("ACC_SYNCHRONIZED" , 0x0020),
+    ("ACC_BRIDGE"       , 0x0040),
+    ("ACC_VARARGS"      , 0x0080),
+    ("ACC_NATIVE"       , 0x0100),
+    ("ACC_ABSTRACT"     , 0x0400),
+    ("ACC_STRICT"       , 0x0800),
+    ("ACC_SYNTHETIC"    , 0x1000),
 ]
 
-def parse_flags(value: int, flags: [(str, int)]) -> [str]:
+def parse_flags(value: int, flags: list[tuple[str, int]]) -> list[str]:
+    "Parse flags from value and return names of flags set"
     return [name for (name, mask) in flags if (value&mask) != 0]
 
-def parse_u1(f): return int.from_bytes(f.read(1), 'big')
-def parse_u2(f): return int.from_bytes(f.read(2), 'big')
-def parse_u4(f): return int.from_bytes(f.read(4), 'big')
+def parse_u1(f: io.IOBase) -> int: return int.from_bytes(f.read(1), 'big')
+def parse_u2(f: io.IOBase) -> int: return int.from_bytes(f.read(2), 'big')
+def parse_u4(f: io.IOBase) -> int: return int.from_bytes(f.read(4), 'big')
 
-def parse_attributes(f, count):
+def parse_attributes(f: io.BufferedReader, count: int) -> list[dict[str, int | bytes]]:
+    "Parse attributes from file"
     attributes = []
-    for j in range(count):
+    for _ in range(count):
         # attribute_info {
         #     u2 attribute_name_index;
         #     u4 attribute_length;
         #     u1 info[attribute_length];
         # }
-        attribute = {}
+        attribute: dict[str, int | bytes] = {}
         attribute['attribute_name_index'] = parse_u2(f)
         attribute_length = parse_u4(f)
         attribute['info'] = f.read(attribute_length)
         attributes.append(attribute)
     return attributes
 
-def parse_class_file(file_path):
+def parse_class_file(file_path: str) -> dict[str, Any]:
+    "Parse class file given it's path"
     with open(file_path, "rb") as f:
-        clazz = {}
+        clazz: dict[str, Any] = {}
         clazz['magic'] = hex(parse_u4(f))
         clazz['minor'] = parse_u2(f)
         clazz['major'] = parse_u2(f)
         constant_pool_count = parse_u2(f)
         constant_pool = []
-        for i in range(constant_pool_count-1):
-            cp_info = {}
+        for _ in range(constant_pool_count-1):
+            cp_info: dict[str, int | str | bytes] = {}
             tag = parse_u1(f)
             if tag == CONSTANT_Methodref:
                 cp_info['tag'] = 'CONSTANT_Methodref'
@@ -110,13 +116,13 @@ def parse_class_file(file_path):
         clazz['this_class'] = parse_u2(f)
         clazz['super_class'] = parse_u2(f)
         interfaces_count = parse_u2(f)
-        interfaces = []
-        for i in range(interfaces_count):
+        interfaces: list[Any] = []
+        for _ in range(interfaces_count):
             raise NotImplementedError("We don't support interfaces")
         clazz['interfaces'] = interfaces
         fields_count = parse_u2(f)
-        fields = []
-        for i in range(fields_count):
+        fields: list[Any] = []
+        for _ in range(fields_count):
             raise NotImplementedError("We don't support fields")
         clazz['fields'] = fields
         methods_count = parse_u2(f)
@@ -127,7 +133,7 @@ def parse_class_file(file_path):
             # u2             descriptor_index;
             # u2             attributes_count;
             # attribute_info attributes[attributes_count];
-            method = {}
+            method: dict[str, Any] = {}
             method['access_flags'] = parse_flags(parse_u2(f), method_access_flags)
             method['name_index'] = parse_u2(f)
             method['descriptor_index'] = parse_u2(f)
@@ -139,18 +145,23 @@ def parse_class_file(file_path):
         clazz['attributes'] = parse_attributes(f, attributes_count)
         return clazz
 
-def find_methods_by_name(clazz, name: bytes):
+def find_methods_by_name(clazz: dict[str, Any], name: bytes) -> list[dict[str, Any]]:
+    "Return methods from parsed class by name"
     return [method
             for method in clazz['methods']
             if clazz['constant_pool'][method['name_index'] - 1]['bytes'] == name]
 
-def find_attributes_by_name(clazz, attributes, name: bytes):
-    return [attr
+def find_attributes_by_name(clazz: dict[str, Any],
+                            attributes: list[dict[str, int | bytes]],
+                            name: bytes) ->  list[dict[str, bytes]]:
+    "Return attributes from parsed class by name"
+    return [cast(dict[str, bytes], attr)
             for attr in attributes
-            if clazz['constant_pool'][attr['attribute_name_index'] - 1]['bytes'] == name]
+            if clazz['constant_pool'][cast(int, attr['attribute_name_index']) - 1]['bytes'] == name]
 
-def parse_code_info(info: bytes):
-    code = {}
+def parse_code_info(info: bytes) -> dict[str, int | bytes]:
+    "Parse code info"
+    code: dict[str, int | bytes] = {}
     with io.BytesIO(info) as f:
         # Code_attribute {
         #     u2 attribute_name_index;
@@ -176,20 +187,23 @@ def parse_code_info(info: bytes):
         # NOTE: parsing the code attribute is not finished
         return code
 
-getstatic_opcode = 0xB2
-ldc_opcode = 0x12
+getstatic_opcode     = 0xB2
+ldc_opcode           = 0x12
 invokevirtual_opcode = 0xB6
-return_opcode = 0xB1
-bipush_opcode = 0x10
+return_opcode        = 0xB1
+bipush_opcode        = 0x10
 
-def get_name_of_class(clazz, class_index: int) -> str:
-    return clazz['constant_pool'][clazz['constant_pool'][class_index - 1]['name_index'] - 1]['bytes'].decode('utf-8')
+def get_name_of_class(clazz: dict[str, Any], class_index: int) -> str:
+    "Get the name of a class"
+    return cast(bytes, clazz['constant_pool'][clazz['constant_pool'][class_index - 1]['name_index'] - 1]['bytes']).decode('utf-8')
 
-def get_name_of_member(clazz, name_and_type_index: int) -> str:
-    return clazz['constant_pool'][clazz['constant_pool'][name_and_type_index - 1]['name_index'] - 1]['bytes'].decode('utf-8')
+def get_name_of_member(clazz: dict[str, Any], name_and_type_index: int) -> str:
+    "Get the name of a member of class"
+    return cast(bytes, clazz['constant_pool'][clazz['constant_pool'][name_and_type_index - 1]['name_index'] - 1]['bytes']).decode('utf-8')
 
-def execute_code(clazz, code: bytes):
-    stack = []
+def execute_code(clazz: dict[str, Any], code: bytes) -> None:
+    "Execute code in context of class"
+    stack: list[dict[str, Any]] = []
     with io.BytesIO(code) as f:
         while f.tell() < len(code):
             opcode = parse_u1(f)
